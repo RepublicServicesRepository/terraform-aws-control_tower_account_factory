@@ -73,6 +73,18 @@ phases:
       # Get AFT admin role ARN for assume_role in providers
       - AFT_MGMT_ACCOUNT=$(aws sts get-caller-identity --query Account --output text)
       - AFT_EXEC_ROLE_ARN=arn:$AWS_PARTITION:iam::$AFT_MGMT_ACCOUNT:role/AWSAFTExecution
+      # Read Spacelift SSM parameters before profile switch (CodeBuild role has SSM access, AWSAFTAdmin does not)
+      - |
+        if [ "$TF_DISTRIBUTION" = "spacelift" ]; then
+          SPACELIFT_API_ENDPOINT=$(aws ssm get-parameter --name "/aft/config/spacelift/api-endpoint" --query "Parameter.Value" --output text)
+          SPACELIFT_API_KEY_ID=$(aws ssm get-parameter --name "/aft/config/spacelift/api-key-id" --with-decryption --query "Parameter.Value" --output text)
+          SPACELIFT_API_KEY_SECRET=$(aws ssm get-parameter --name "/aft/config/spacelift/api-key-secret" --with-decryption --query "Parameter.Value" --output text)
+          SPACELIFT_SPACE_NAME=$(aws ssm get-parameter --name "/aft/config/spacelift/space-name" --query "Parameter.Value" --output text)
+          SPACELIFT_PARENT_SPACE_ID=$(aws ssm get-parameter --name "/aft/config/spacelift/parent-space-id" --query "Parameter.Value" --output text)
+          SPACELIFT_IAC_VENDOR=$(aws ssm get-parameter --name "/aft/config/spacelift/iac-vendor" --query "Parameter.Value" --output text)
+          SPACELIFT_INTEGRATION_ROLE_ARN=$(aws ssm get-parameter --name "/aft/config/spacelift/integration-role-arn" --query "Parameter.Value" --output text 2>/dev/null || echo "")
+          SPACELIFT_INTEGRATION_NAME=$(aws ssm get-parameter --name "/aft/config/spacelift/integration-name" --query "Parameter.Value" --output text 2>/dev/null || echo "")
+        fi
       - cd $DEFAULT_PATH/aws-aft-core-framework/sources/aft-customizations-common/templates/customizations_pipeline
       - |
         if ls *.jinja >/dev/null 2>&1; then
@@ -94,15 +106,6 @@ phases:
         if [ "$TF_DISTRIBUTION" = "spacelift" ]; then
           echo "Spacelift distribution detected - creating Spacelift stack for customizations pipeline"
           
-          # Get Spacelift configuration from SSM
-          SPACELIFT_API_ENDPOINT=$(aws ssm get-parameter --name "/aft/config/spacelift/api-endpoint" --query "Parameter.Value" --output text)
-          SPACELIFT_API_KEY_ID=$(aws ssm get-parameter --name "/aft/config/spacelift/api-key-id" --with-decryption --query "Parameter.Value" --output text)
-          SPACELIFT_API_KEY_SECRET=$(aws ssm get-parameter --name "/aft/config/spacelift/api-key-secret" --with-decryption --query "Parameter.Value" --output text)
-          SPACELIFT_SPACE_NAME=$(aws ssm get-parameter --name "/aft/config/spacelift/space-name" --query "Parameter.Value" --output text)
-          SPACELIFT_PARENT_SPACE_ID=$(aws ssm get-parameter --name "/aft/config/spacelift/parent-space-id" --query "Parameter.Value" --output text)
-          SPACELIFT_IAC_VENDOR=$(aws ssm get-parameter --name "/aft/config/spacelift/iac-vendor" --query "Parameter.Value" --output text)
-          SPACELIFT_INTEGRATION_ROLE_ARN=$(aws ssm get-parameter --name "/aft/config/spacelift/integration-role-arn" --query "Parameter.Value" --output text 2>/dev/null || echo "")
-          SPACELIFT_INTEGRATION_NAME=$(aws ssm get-parameter --name "/aft/config/spacelift/integration-name" --query "Parameter.Value" --output text 2>/dev/null || echo "")
           SPACELIFT_STACK_NAME="$VENDED_ACCOUNT_ID-customizations-pipeline"
           
           echo "Spacelift VCS Configuration:"
